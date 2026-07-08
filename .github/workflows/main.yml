@@ -131,8 +131,37 @@ jobs:
       release_upload_url: ${{ needs.create-release.outputs.upload_url }}
       release_tag : ${{ needs.create-release.outputs.tag }}
 
-  publish-release:
+  sign:
     needs: [create-release, build-base, build-small, build-medium, build-large-v3]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download model assets from the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p release
+          gh release download "${{ needs.create-release.outputs.tag }}" \
+            --repo "${{ github.repository }}" --dir release --pattern '*.bin*'
+
+      - name: Generate signed manifest
+        uses: NoMercy-Entertainment/nomercy-media-server/.github/actions/generate-release-manifest@master
+        with:
+          output-dir: release
+          version: ${{ needs.create-release.outputs.tag }}
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+
+      - name: Upload manifest and signature to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ needs.create-release.outputs.tag }}" \
+            release/manifest.json release/manifest.json.sig \
+            --repo "${{ github.repository }}" --clobber
+
+  publish-release:
+    needs: [create-release, build-base, build-small, build-medium, build-large-v3, sign]
     runs-on: ubuntu-latest
     steps:
       - name: Publish Release

@@ -10,7 +10,7 @@ on:
 
 jobs:
   create-release:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, beast-unit]
     outputs:
       tag: ${{ steps.create-tag.outputs.tag }}
       upload_url: ${{ steps.create-release.outputs.upload_url }}
@@ -133,7 +133,7 @@ jobs:
 
   sign:
     needs: [create-release, build-base, build-small, build-medium, build-large-v3]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, beast-unit]
     permissions:
       contents: write
     steps:
@@ -162,7 +162,7 @@ jobs:
 
   publish-release:
     needs: [create-release, build-base, build-small, build-medium, build-large-v3, sign]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, beast-unit]
     steps:
       - name: Publish Release
         env:

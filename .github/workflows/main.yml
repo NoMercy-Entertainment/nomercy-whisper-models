@@ -10,6 +10,7 @@ on:
 
 jobs:
   create-release:
+    timeout-minutes: 7200
     runs-on: [self-hosted, Linux, X64, beast-unit]
     outputs:
       tag: ${{ steps.create-tag.outputs.tag }}
@@ -132,6 +133,7 @@ jobs:
       release_tag : ${{ needs.create-release.outputs.tag }}
 
   sign:
+    timeout-minutes: 7200
     needs: [create-release, build-base, build-small, build-medium, build-large-v3]
     runs-on: [self-hosted, Linux, X64, beast-unit]
     permissions:
@@ -161,6 +163,7 @@ jobs:
             --repo "${{ github.repository }}" --clobber
 
   publish-release:
+    timeout-minutes: 7200
     needs: [create-release, build-base, build-small, build-medium, build-large-v3, sign]
     runs-on: [self-hosted, Linux, X64, beast-unit]
     steps:

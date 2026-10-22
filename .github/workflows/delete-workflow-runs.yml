@@ -27,5 +27,5 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           repository: ${{ github.repository }}
-          retain_days: 30
-          keep_minimum_runs: 6
+          retain_days: ${{ inputs.retain_days || 30 }}
+          keep_minimum_runs: ${{ inputs.keep_minimum_runs || 6 }}

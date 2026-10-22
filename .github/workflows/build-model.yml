@@ -26,17 +26,10 @@ jobs:
     runs-on: [self-hosted, Linux, X64, beast-unit]
 
     steps:
-      - name: Free Disk Space (Ubuntu)
-        uses: jlumbroso/free-disk-space@main
-        with:
-          tool-cache: false
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: true
-          swap-storage: true
-
+      # No disk-cleanup step here on purpose. The job runs on a persistent self-hosted
+      # host, where jlumbroso/free-disk-space would strip toolchains, Docker images and
+      # swap that other workloads rely on. The checkout below wipes the job workspace,
+      # and the runner's own job-completed hook cleans up after the job.
       - name: Checkout whisper.cpp
         uses: actions/checkout@v4
         with:

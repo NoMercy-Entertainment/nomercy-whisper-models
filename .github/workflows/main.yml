@@ -8,6 +8,12 @@ on:
   schedule:
     - cron: "0 3 * * 0"
 
+# One release build at a time. A second run that starts while another is still
+# building waits for it instead of racing it for the same draft release.
+concurrency:
+  group: whisper-models-release
+  cancel-in-progress: false
+
 jobs:
   create-release:
     timeout-minutes: 7200
@@ -38,10 +44,10 @@ jobs:
       - name: Create version tag
         id: create-tag
         run: |
-          VERSION=$(date +'%Y.%m.%d')
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${VERSION}.$(date +'%H%M')"
-          fi
+          # Date plus UTC time, for every trigger. A day-only tag made a push and the
+          # weekly schedule on the same day reuse one tag, so the second run could
+          # redraft or overwrite an already published release.
+          VERSION=$(date -u +'%Y.%m.%d.%H%M')
           echo "tag=v${VERSION}" >> $GITHUB_OUTPUT
 
       - name: Create draft release

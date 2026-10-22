@@ -58,10 +58,17 @@ jobs:
       - name: Install dependencies
         run: |
           git config --global --add safe.directory ${{ github.workspace }}
-          sudo apt-get update && sudo apt-get install -y git-lfs wget python3 python3-pip
+          sudo apt-get update && sudo apt-get install -y git-lfs wget python3 python3-pip python3-venv
           git lfs install
-          pip3 install numpy tqdm torch --index-url https://download.pytorch.org/whl/cpu
-          pip3 install transformers
+          # The runner's system Python is externally managed (PEP 668) and refuses
+          # pip installs, so the conversion toolchain lives in a per-job venv.
+          VENV_DIR="${RUNNER_TEMP}/whisper-venv"
+          rm -rf "$VENV_DIR"
+          python3 -m venv "$VENV_DIR"
+          echo "${VENV_DIR}/bin" >> "$GITHUB_PATH"
+          "${VENV_DIR}/bin/pip" install --upgrade pip
+          "${VENV_DIR}/bin/pip" install numpy tqdm torch --index-url https://download.pytorch.org/whl/cpu
+          "${VENV_DIR}/bin/pip" install transformers
           mkdir -p ${{ github.workspace }}/models-src ${{ github.workspace }}/output/models
 
       - name: Download HuggingFace model ${{ inputs.model_name }}

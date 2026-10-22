@@ -31,7 +31,7 @@ jobs:
       # swap that other workloads rely on. The checkout below wipes the job workspace,
       # and the runner's own job-completed hook cleans up after the job.
       - name: Checkout whisper.cpp
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ggml-org/whisper.cpp
           ref: v1.7.6
@@ -112,7 +112,7 @@ jobs:
           rm -rf ${{ github.workspace }}/models-src/${{ inputs.model_name }}
 
       - name: Upload GGML model ${{ inputs.model_name }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: whisper-ggml-model-${{ inputs.model_name }}
           path: output/models/ggml-${{ inputs.model_name }}.bin
@@ -142,7 +142,7 @@ jobs:
 
       # Optionally, still upload as workflow artifact for redundancy
       - name: Upload as workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ggml-${{ inputs.model_name }}
           path: ${{ steps.set-upload-pattern.outputs.pattern }}

@@ -35,7 +35,7 @@ jobs:
         with:
           repository: ggml-org/whisper.cpp
           ref: v1.7.6
-          
+
       - name: Download mel filters
         run: |
           # Ensure the whisper assets directory exists and download mel filters
@@ -68,12 +68,12 @@ jobs:
         run: |
           # For large models, use sparse checkout to avoid downloading unnecessary files
           MODEL_DIR="${{ github.workspace }}/models-src/${{ inputs.model_name }}"
-          
+
           for i in {1..3}; do
             rm -rf "$MODEL_DIR"
             mkdir -p "$MODEL_DIR"
             cd "$MODEL_DIR"
-            
+
             if git clone --filter=blob:none --no-checkout https://huggingface.co/${{ inputs.model_repo }} .; then
               # Configure sparse checkout to exclude large unnecessary files
               git sparse-checkout init --cone
@@ -91,7 +91,7 @@ jobs:
                 fi
               fi
             fi
-            
+
             echo "Attempt $i failed, retrying..."
             cd ${{ github.workspace }}
             rm -rf "$MODEL_DIR"

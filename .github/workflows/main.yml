@@ -58,45 +58,48 @@ jobs:
           name: "Whisper GGML Models ${{ steps.create-tag.outputs.tag }}"
           body: |
             # Whisper GGML Models Release ${{ steps.create-tag.outputs.tag }}
-            
+
             This release contains GGML-converted Whisper models for use with whisper.cpp and compatible applications.
-            
+
             ## Models Included
             - **ggml-base.bin** - Base model (~150MB)
-            - **ggml-small.bin** - Small model (~500MB) 
+            - **ggml-small.bin** - Small model (~500MB)
             - **ggml-medium.bin** - Medium model (~1.5GB)
             - **ggml-large-v3.bin** - Large v3 model (~3GB, split into parts due to GitHub size limits)
-            
+            - **ggml-silero-v5.1.2.bin** - Silero VAD v5.1.2 voice-activity model for the whisper.cpp `vad_model` option (~0.9MB, MIT license, from [ggml-org/whisper-vad](https://huggingface.co/ggml-org/whisper-vad))
+
+            Every asset is listed with its SHA-256 in `manifest.json`, signed as `manifest.json.sig`.
+
             ## Usage
             These models can be used directly with:
             - [whisper.cpp](https://github.com/ggml-org/whisper.cpp)
             - [whisper-desktop](https://github.com/Const-me/Whisper)
             - Any application supporting GGML Whisper models
-            
+
             ## How to Reassemble the Large Model
             After downloading all parts (e.g., `ggml-large-v3.bin.part-aa`, `ggml-large-v3.bin.part-ab`, ...), run the following command in the folder with the parts:
-            
+
             **Linux / macOS (Terminal):**
             ```sh
             cat ggml-large-v3.bin.part-* > ggml-large-v3.bin
             ```
-            
+
             **Windows (Command Prompt):**
             ```cmd
             copy /b ggml-large-v3.bin.part-aa+ggml-large-v3.bin.part-ab+ggml-large-v3.bin.part-ac ggml-large-v3.bin
             ```
             *(Add all part filenames in order, separated by `+`.)*
-            
+
             **Windows (PowerShell):**
             ```powershell
             Get-Content .\ggml-large-v3.bin.part-* -Raw | Set-Content .\ggml-large-v3.bin -AsByteStream
             ```
-            
+
             ## Build Information
             - Built from: whisper.cpp ${{ steps.get-whispercpp-version.outputs.version }}
-            - Source models: OpenAI Whisper (HuggingFace)
+            - Source models: OpenAI Whisper (HuggingFace), Silero VAD (ggml-org/whisper-vad, MIT)
             - Build date: ${{ steps.create-tag.outputs.tag }}
-            
+
             Generated automatically by GitHub Actions.
           draft: true
         env:
@@ -138,9 +141,50 @@ jobs:
       release_upload_url: ${{ needs.create-release.outputs.upload_url }}
       release_tag : ${{ needs.create-release.outputs.tag }}
 
+  # The silero voice-activity model whisper.cpp uses for its `vad_model` option. The
+  # media server fetches it from this release next to the whisper models, by asset
+  # name `ggml-silero-v5.1.2`, and only when the signed manifest lists it. It is not
+  # converted here but fetched from a pinned revision and checked against a pinned
+  # digest, so a changed upstream file fails the run instead of shipping unnoticed.
+  add-vad-model:
+    timeout-minutes: 30
+    needs: create-release
+    runs-on: [self-hosted, Linux, X64, beast-unit]
+    env:
+      VAD_FILE: ggml-silero-v5.1.2.bin
+      # whisper.cpp v1.9.1's models/download-vad-model.sh fetches this file from
+      # ggml-org/whisper-vad; the revision pins the exact blob that script resolved
+      # to on 2026-10-21.
+      VAD_URL: https://huggingface.co/ggml-org/whisper-vad/resolve/9ffd54a1e1ee413ddf265af9913beaf518d1639b/ggml-silero-v5.1.2.bin
+      VAD_SHA256: 29940d98d42b91fbd05ce489f3ecf7c72f0a42f027e4875919a28fb4c04ea2cf
+      VAD_SIZE: "885098"
+    steps:
+      - name: Download the silero VAD model from its pinned revision
+        run: |
+          rm -rf vad && mkdir -p vad
+          curl --fail --location --silent --show-error --retry 3 --retry-delay 5 \
+            --output "vad/${VAD_FILE}" "${VAD_URL}"
+
+      - name: Verify the digest and size
+        run: |
+          ACTUAL_SIZE=$(stat -c%s "vad/${VAD_FILE}")
+          if [ "${ACTUAL_SIZE}" != "${VAD_SIZE}" ]; then
+            echo "::error::${VAD_FILE} is ${ACTUAL_SIZE} bytes, expected ${VAD_SIZE}"
+            exit 1
+          fi
+          echo "${VAD_SHA256}  vad/${VAD_FILE}" | sha256sum --check --strict
+          echo "${VAD_FILE}: ${ACTUAL_SIZE} bytes, sha256 ${VAD_SHA256}"
+
+      - name: Upload the VAD model to the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ needs.create-release.outputs.tag }}" "vad/${VAD_FILE}" \
+            --repo "${{ github.repository }}" --clobber
+
   sign:
     timeout-minutes: 7200
-    needs: [create-release, build-base, build-small, build-medium, build-large-v3]
+    needs: [create-release, build-base, build-small, build-medium, build-large-v3, add-vad-model]
     runs-on: [self-hosted, Linux, X64, beast-unit]
     permissions:
       contents: write
@@ -149,9 +193,23 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          mkdir -p release
+          rm -rf release && mkdir -p release
           gh release download "${{ needs.create-release.outputs.tag }}" \
             --repo "${{ github.repository }}" --dir release --pattern '*.bin*'
+
+      - name: Check that every expected asset is present
+        run: |
+          # The manifest only lists what was downloaded, so a missing asset would
+          # otherwise ship inside a validly signed manifest without anyone noticing.
+          missing=0
+          for f in ggml-base.bin ggml-small.bin ggml-medium.bin ggml-large-v3.bin.part-aa ggml-silero-v5.1.2.bin; do
+            if [ ! -f "release/$f" ]; then
+              echo "::error::release asset $f is missing"
+              missing=1
+            fi
+          done
+          [ "$missing" = "0" ]
+          ls -l release
 
       - name: Generate signed manifest
         uses: NoMercy-Entertainment/nomercy-media-server/.github/actions/generate-release-manifest@master
@@ -170,7 +228,7 @@ jobs:
 
   publish-release:
     timeout-minutes: 7200
-    needs: [create-release, build-base, build-small, build-medium, build-large-v3, sign]
+    needs: [create-release, build-base, build-small, build-medium, build-large-v3, add-vad-model, sign]
     runs-on: [self-hosted, Linux, X64, beast-unit]
     steps:
       - name: Publish Release
